@@ -1,5 +1,5 @@
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta
 from nicegui import ui
 
 # SQLite Datenbank initialisieren (nur beim ersten Start)
@@ -7,7 +7,7 @@ def init_db():
     conn = sqlite3.connect('app.db')
     c = conn.cursor()
     c.execute('''CREATE TABLE IF NOT EXISTS users
-                 (name TEXT PRIMARY KEY, profile_picture TEXT, race TEXT, user_class TEXT, experience INTEGER, level INTEGER)''')
+                 (name TEXT PRIMARY KEY, profile_picture TEXT, user_class TEXT, race TEXT, experience INTEGER, level INTEGER)''')
     c.execute('''CREATE TABLE IF NOT EXISTS tasks
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, difficulty TEXT, due_date TEXT, status TEXT, user_name TEXT,
                   FOREIGN KEY(user_name) REFERENCES users(name))''')
@@ -15,11 +15,11 @@ def init_db():
     conn.close()
 
 class User:
-    def __init__(self, name, profile_picture, race, user_class, experience=0, level=1):
+    def __init__(self, name, profile_picture, user_class, race, experience=0, level=1):
         self.name = name
         self.profile_picture = profile_picture
-        self.race = race
         self.user_class = user_class
+        self.race = race
         self.experience = experience
         self.level = level
 
@@ -37,9 +37,9 @@ class User:
     def save_to_db(self):
         conn = sqlite3.connect('app.db')
         c = conn.cursor()
-        c.execute('''INSERT OR REPLACE INTO users (name, profile_picture, race, user_class, experience, level) 
+        c.execute('''INSERT OR REPLACE INTO users (name, profile_picture, user_class, race, experience, level) 
                      VALUES (?, ?, ?, ?, ?, ?)''', 
-                  (self.name, self.profile_picture, self.race, self.user_class, self.experience, self.level))
+                  (self.name, self.profile_picture, self.user_class, self.race, self.experience, self.level))
         conn.commit()
         conn.close()
 
@@ -54,6 +54,14 @@ class TaskManager:
         c.execute("SELECT * FROM tasks")
         self.tasks = c.fetchall()
         conn.close()
+
+    def get_pending_tasks(self, user_name):
+        conn = sqlite3.connect('app.db')
+        c = conn.cursor()
+        c.execute("SELECT * FROM tasks WHERE status = 'offen' AND user_name = ?", (user_name,))
+        pending_tasks = c.fetchall()
+        conn.close()
+        return pending_tasks
 
     def add_task(self, name, difficulty, due_date, user):
         conn = sqlite3.connect('app.db')
@@ -104,9 +112,9 @@ class TaskApp:
 
     def create_user(self, name):
         profile_picture = ui.input("Profilbild (Pfad/URL):").value
-        race = ui.input("Rasse:").value
         user_class = ui.input("Klasse:").value
-        self.user = User(name, profile_picture, race, user_class)
+        race = ui.select(["Zauberer", "Rapper", "Soldat", "Bettler"], label="Wähle deine Rasse").value
+        self.user = User(name, profile_picture, user_class, race)
         self.user.save_to_db()
 
     def add_experience(self, points):
@@ -142,6 +150,15 @@ class TaskApp:
         self.add_experience(points)
         ui.notify("Aufgabe erledigt!")
 
+    def show_pending_tasks(self):
+        if self.user:
+            pending_tasks = self.task_manager.get_pending_tasks(self.user.name)
+            if pending_tasks:
+                task_list = "\n".join([f"{task[0]}: {task[1]} ({task[2]} - bis {task[3]})" for task in pending_tasks])
+                ui.notify(f"Offene Aufgaben:\n{task_list}")
+            else:
+                ui.notify("Keine offenen Aufgaben.")
+
 def main():
     init_db()
     app = TaskApp()
@@ -157,8 +174,8 @@ def main():
     ui.button("Bestätigen", on_click=on_submit)
 
     task_name_input = ui.input("Aufgabenname:")
-    difficulty_input = ui.input("Schwierigkeit (leicht/mittel/schwer):")
-    due_date_input = ui.input("Fälligkeitsdatum (YYYY-MM-DD):")
+    difficulty_input = ui.select(["leicht", "mittel", "schwer"], value="leicht", label="Schwierigkeit auswählen")
+    due_date_input = ui.input("Fälligkeitsdatum (YYYY-MM-DD):", value=(datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d"))
 
     def add_task():
         app.add_task(task_name_input.value, difficulty_input.value, due_date_input.value)
@@ -176,6 +193,8 @@ def main():
         app.delete_task(int(task_id_input.value))
 
     ui.button("Aufgabe löschen", on_click=delete_task)
+
+    ui.button("Offene Aufgaben anzeigen", on_click=app.show_pending_tasks)
 
 if __name__ in {"__main__", "__mp_main__"}:
     main()
