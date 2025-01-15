@@ -112,10 +112,13 @@ class TaskApp:
     def __init__(self):
         self.user = None
         self.task_manager = TaskManager()
+        self.profile_ui = ui.image('default-profile.png').style('position: fixed; top: 10px; right: 10px; border-radius: 50%; width: 50px; height: 50px;').classes('hidden')
 
     def load_user(self, name):
         self.user = User.load_user(name)
-        if self.user is None:
+        if self.user:
+            self.profile_ui.set_source(self.user.profile_picture).classes(remove='hidden')
+        else:
             self.create_user(name)
 
     def create_user(self, name):
@@ -124,6 +127,7 @@ class TaskApp:
         user_race = ui.input("Rasse:").value
         self.user = User(name, profile_picture, user_class, user_race)
         self.user.save_to_db()
+        self.profile_ui.set_source(profile_picture).classes(remove='hidden')
 
     def add_experience(self, points):
         if self.user:
@@ -163,7 +167,7 @@ class TaskApp:
             pending_tasks = self.task_manager.get_pending_tasks(self.user.name)
             if pending_tasks:
                 task_list = "\n".join([f"{task[0]}: {task[1]} ({task[2]} - bis {task[3]})" for task in pending_tasks])
-                ui.notify(f"Offene Aufgaben:\n{task_list}")
+                ui.notify(f"Offene Aufgaben für {self.user.name}:\n{task_list}")
             else:
                 ui.notify("Keine offenen Aufgaben.")
 
@@ -172,13 +176,34 @@ class TaskApp:
             completed_tasks = self.task_manager.get_completed_tasks(self.user.name)
             if completed_tasks:
                 task_list = "\n".join([f"{task[0]}: {task[1]} ({task[2]} - bis {task[3]})" for task in completed_tasks])
-                ui.notify(f"Erledigte Aufgaben:\n{task_list}")
+                ui.notify(f"Erledigte Aufgaben für {self.user.name}:\n{task_list}")
             else:
                 ui.notify("Keine erledigten Aufgaben.")
 
 def main():
     init_db()
     app = TaskApp()
+
+    ui.add_head_html('''
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+        .hidden {
+            display: none;
+        }
+        .profile {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+        }
+    </style>
+    ''')
 
     ui.label("Willkommen beim ToDoRPG")
     user_name_input = ui.input("Name eingeben:")
@@ -193,7 +218,6 @@ def main():
     task_name_input = ui.input("Aufgabenname:")
     due_date_input = ui.input("Fälligkeitsdatum (DD-MM-YYYY):", value=(datetime.now() + timedelta(days=1)).strftime("%d-%m-%Y"))
 
-    # Schwierigkeitsknöpfe in einer Knopfgruppe
     with ui.button_group():
         ui.button("Leicht", on_click=lambda: app.add_task(task_name_input.value, "leicht", due_date_input.value), color='green')
         ui.button("Mittel", on_click=lambda: app.add_task(task_name_input.value, "mittel", due_date_input.value), color='yellow')
