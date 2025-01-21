@@ -2,7 +2,7 @@ import sqlite3
 from datetime import datetime, timedelta
 from nicegui import ui
 
-# SQLite Datenbank initialisieren (nur beim ersten Start)
+# SQLite-Datenbank initialisieren (nur beim ersten Start)
 def init_db():
     conn = sqlite3.connect('app.db')
     c = conn.cursor()
@@ -108,6 +108,7 @@ class TaskApp:
             self.user = User(name)
             self.user.save_to_db()
         self.buttons_disabled["login"] = True
+        self.update_user_info()
         ui.notify(f"Willkommen, {self.user.name}!")
 
     def update_user_class_race(self, user_class, user_race):
@@ -119,7 +120,19 @@ class TaskApp:
             self.user.user_race = user_race
             self.user.save_to_db()
             self.buttons_disabled["save_profile"] = True
+            self.update_user_info()
             ui.notify("Klasse und Rasse erfolgreich aktualisiert.")
+
+    def update_user_info(self):
+        if self.user:
+            with ui.row():
+                ui.image(f"{self.user.profile_picture}", width=100)  # Profilbild anzeigen
+                with ui.column():
+                    ui.label(f"Name: {self.user.name}")
+                    ui.label(f"Profilbild: {self.user.profile_picture}")  # Pfad des Profilbildes
+                    ui.label(f"Klasse: {self.user.user_class}")
+                    ui.label(f"Rasse: {self.user.user_race}")
+                    ui.label(f"Level: {self.user.level}")
 
     def add_experience(self, points):
         if self.user:
@@ -129,16 +142,20 @@ class TaskApp:
                 self.user.experience -= self.user.level * 5
                 ui.notify(f"Level {self.user.level} erreicht! Glückwunsch!")
             self.user.save_to_db()
+            self.update_user_info()
 
-    def display_all_tasks(self):
+    def display_open_tasks(self):
         open_tasks = self.task_manager.get_tasks(self.user.name, 'offen')
-        completed_tasks = self.task_manager.get_tasks(self.user.name, 'erledigt')
 
         with ui.column():
             ui.label("Offene Aufgaben:")
             for task in open_tasks:
                 ui.label(f"{task[1]} - {task[2]} (Fällig: {task[3]})")
 
+    def display_completed_tasks(self):
+        completed_tasks = self.task_manager.get_tasks(self.user.name, 'erledigt')
+
+        with ui.column():
             ui.label("Abgeschlossene Aufgaben:")
             for task in completed_tasks:
                 ui.label(f"{task[1]} - {task[2]} (Erledigt)")
@@ -196,12 +213,14 @@ def main():
             ui.button("Mittel", on_click=lambda: app.add_task(task_name_input.value, "mittel", task_due_date.value), color="yellow")
             ui.button("Schwer", on_click=lambda: app.add_task(task_name_input.value, "schwer", task_due_date.value), color="red")
 
+        # Neuer Button für das Hinzufügen von Aufgaben
+        ui.button("Aufgabe hinzufügen", on_click=lambda: app.add_task(task_name_input.value, "leicht", task_due_date.value), color="blue")
+
         task_id_input = ui.input("Aufgaben-ID:")
         ui.button("Aufgabe erledigen", on_click=lambda: app.complete_task(int(task_id_input.value)), color="green")
         ui.button("Aufgabe löschen", on_click=lambda: app.delete_task(int(task_id_input.value)), color="red")
-        ui.button("Offene Aufgaben anzeigen", on_click=lambda: app.display_all_tasks())
-
-    ui.button("Alle Aufgaben anzeigen", on_click=app.display_all_tasks)
+        ui.button("Offene Aufgaben anzeigen", on_click=lambda: app.display_open_tasks())
+        ui.button("Erledigte Aufgaben anzeigen", on_click=lambda: app.display_completed_tasks())
 
 if __name__ in {"__main__", "__mp_main__"}:
     main()
