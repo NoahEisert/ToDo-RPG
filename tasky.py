@@ -1,6 +1,7 @@
 import sqlite3
 from datetime import datetime, timedelta
 from nicegui import ui
+from PIL import Image
 
 # SQLite-Datenbank initialisieren (nur beim ersten Start)
 def init_db():
@@ -17,7 +18,7 @@ def init_db():
 class User:
     def __init__(self, name, profile_picture='', user_class=None, user_race=None, experience=0, level=1):
         self.name = name
-        self.profile_picture = profile_picture or 'default-profile.png'
+        self.profile_picture = profile_picture or 'default-profile.jpg'
         self.user_class = user_class
         self.user_race = user_race
         self.experience = experience
@@ -98,6 +99,8 @@ class TaskApp:
             "login": False,
             "save_profile": False
         }
+        self.text_elements = []  # Liste, um UI-Elemente zu speichern, die gelöscht werden sollen
+        self.tasks_elements = []  # Liste, um die Aufgabenanzeigen zu speichern, die gelöscht werden sollen
 
     def load_user(self, name):
         if self.buttons_disabled["login"]:
@@ -124,15 +127,17 @@ class TaskApp:
             ui.notify("Klasse und Rasse erfolgreich aktualisiert.")
 
     def update_user_info(self):
+        # Nur aktualisieren, wenn der Benutzer existiert
         if self.user:
             with ui.row():
-                ui.image(f"{self.user.profile_picture}", width=100)  # Profilbild anzeigen
-                with ui.column():
+                ui.image(f"{self.user.profile_picture}")  # Profilbild anzeigen
+                with ui.column() as column:
                     ui.label(f"Name: {self.user.name}")
                     ui.label(f"Profilbild: {self.user.profile_picture}")  # Pfad des Profilbildes
                     ui.label(f"Klasse: {self.user.user_class}")
                     ui.label(f"Rasse: {self.user.user_race}")
                     ui.label(f"Level: {self.user.level}")
+                self.text_elements.append(column)  # Speichere die textbasierte UI-Komponente
 
     def add_experience(self, points):
         if self.user:
@@ -142,46 +147,68 @@ class TaskApp:
                 self.user.experience -= self.user.level * 5
                 ui.notify(f"Level {self.user.level} erreicht! Glückwunsch!")
             self.user.save_to_db()
-            self.update_user_info()
-
-    def display_open_tasks(self):
-        open_tasks = self.task_manager.get_tasks(self.user.name, 'offen')
-
-        with ui.column():
-            ui.label("Offene Aufgaben:")
-            for task in open_tasks:
-                ui.label(f"{task[1]} - {task[2]} (Fällig: {task[3]})")
-
-    def display_completed_tasks(self):
-        completed_tasks = self.task_manager.get_tasks(self.user.name, 'erledigt')
-
-        with ui.column():
-            ui.label("Abgeschlossene Aufgaben:")
-            for task in completed_tasks:
-                ui.label(f"{task[1]} - {task[2]} (Erledigt)")
 
     def add_task(self, name, difficulty, due_date):
         if self.user:
             self.task_manager.add_task(name, difficulty, due_date, self.user.name)
-            ui.notify("Aufgabe hinzugefügt!")
+            ui.notify(f"Aufgabe '{name}' hinzugefügt!")  # Nur Benachrichtigung über die hinzugefügte Aufgabe
 
-    def complete_task(self, task_id):
+    def complete_task(self, task_name):
         if self.user:
-            difficulty = self.task_manager.complete_task(task_id)
-            points = {"leicht": 1, "mittel": 2, "schwer": 3}.get(difficulty, 0)
-            self.add_experience(points)
-            ui.notify("Aufgabe abgeschlossen!")
+            tasks = self.task_manager.get_tasks(self.user.name, 'offen')
+            task_id = next((task[0] for task in tasks if task[1] == task_name), None)
+            if task_id:
+                difficulty = self.task_manager.complete_task(task_id)
+                points = {"leicht": 1, "mittel": 2, "schwer": 3}.get(difficulty, 0)
+                self.add_experience(points)
+                ui.notify("Aufgabe abgeschlossen!")
+            else:
+                ui.notify("Aufgabe nicht gefunden!")
 
-    def delete_task(self, task_id):
+    def delete_task(self, task_name):
         if self.user:
-            self.task_manager.delete_task(task_id)
-            ui.notify("Aufgabe gelöscht!")
+            tasks = self.task_manager.get_tasks(self.user.name, 'offen')
+            task_id = next((task[0] for task in tasks if task[1] == task_name), None)
+            if task_id:
+                self.task_manager.delete_task(task_id)
+                ui.notify("Aufgabe gelöscht!")
+            else:
+                ui.notify("Aufgabe nicht gefunden!")
+
+    def clear_ui(self):
+        # Lösche nur die Text-Labels und Text-Inhalte
+        for element in self.text_elements:
+            element.clear()  # Lösche die textbasierte UI-Komponente
+        self.text_elements.clear()  # Lösche die Liste der Text-UI-Elemente
+
+        # Lösche auch die Aufgabenanzeigen
+        for tasks in self.tasks_elements:
+            tasks.clear()  # Lösche die Anzeige der Aufgaben
+        self.tasks_elements.clear()  # Lösche die Liste der Aufgabenanzeigen
+
+    def display_open_tasks(self):
+        open_tasks = self.task_manager.get_tasks(self.user.name, 'offen')
+
+        with ui.column() as tasks_column:
+            ui.label("Offene Aufgaben:")
+            for task in open_tasks:
+                ui.label(f"{task[1]} - {task[2]} (Fällig: {task[3]})")
+            self.tasks_elements.append(tasks_column)  # Speichere die Aufgabenanzeige
+
+    def display_completed_tasks(self):
+        completed_tasks = self.task_manager.get_tasks(self.user.name, 'erledigt')
+
+        with ui.column() as tasks_column:
+            ui.label("Abgeschlossene Aufgaben:")
+            for task in completed_tasks:
+                ui.label(f"{task[1]} - {task[2]} (Erledigt)")
+            self.tasks_elements.append(tasks_column)  # Speichere die Aufgabenanzeige
 
 def main():
     init_db()
     app = TaskApp()
 
-    ui.label("Willkommen bei ToDoRPG")
+    ui.label("DONERIGHT-Ihre Management Software")
 
     with ui.row():
         user_name_input = ui.input("Name eingeben:")
@@ -194,10 +221,15 @@ def main():
         def select_profile_picture():
             def on_file_selected(e):
                 if e.files:
-                    file_path = e.files[0].name
+                    file = e.files[0]
+                    # Konvertiere das Bild zu JPG
+                    img = Image.open(file)
+                    file_path = f"images/{app.user.name}_profile.jpg"
+                    img.convert('RGB').save(file_path, "JPEG")
                     app.user.profile_picture = file_path
-                    app.update_user_class_race(user_class.value, user_race.value)
-                    ui.notify("Profilbild und Daten aktualisiert!")
+                    app.user.save_to_db()  # Speichere das Profilbild in der Datenbank
+                    app.update_user_info()  # Aktualisiere die Benutzerinfo
+                    ui.notify("Profilbild aktualisiert!")
 
             ui.upload(on_upload=on_file_selected).open()
 
@@ -213,14 +245,18 @@ def main():
             ui.button("Mittel", on_click=lambda: app.add_task(task_name_input.value, "mittel", task_due_date.value), color="yellow")
             ui.button("Schwer", on_click=lambda: app.add_task(task_name_input.value, "schwer", task_due_date.value), color="red")
 
-        # Neuer Button für das Hinzufügen von Aufgaben
-        ui.button("Aufgabe hinzufügen", on_click=lambda: app.add_task(task_name_input.value, "leicht", task_due_date.value), color="blue")
+        # Eingabefeld für das Erledigen oder Löschen von Aufgaben
+        task_action_input = ui.input("Aufgabenname eingeben:")
 
-        task_id_input = ui.input("Aufgaben-ID:")
-        ui.button("Aufgabe erledigen", on_click=lambda: app.complete_task(int(task_id_input.value)), color="green")
-        ui.button("Aufgabe löschen", on_click=lambda: app.delete_task(int(task_id_input.value)), color="red")
-        ui.button("Offene Aufgaben anzeigen", on_click=lambda: app.display_open_tasks())
-        ui.button("Erledigte Aufgaben anzeigen", on_click=lambda: app.display_completed_tasks())
+        with ui.row():
+            ui.button("Aufgabe erledigen", on_click=lambda: app.complete_task(task_action_input.value), color="green")
+            ui.button("Aufgabe löschen", on_click=lambda: app.delete_task(task_action_input.value), color="red")
+            ui.button("Clear", on_click=lambda: app.clear_ui(), color="blue")  # Clear-Knopf zum Löschen der UI
+
+        # Knöpfe zum Anzeigen von offenen und erledigten Aufgaben nebeneinander
+        with ui.row():
+            ui.button("Offene Aufgaben anzeigen", on_click=app.display_open_tasks)
+            ui.button("Abgeschlossene Aufgaben anzeigen", on_click=app.display_completed_tasks)
 
 if __name__ in {"__main__", "__mp_main__"}:
     main()
