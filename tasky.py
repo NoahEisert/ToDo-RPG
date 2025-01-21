@@ -130,7 +130,7 @@ class TaskApp:
                 ui.notify(f"Level {self.user.level} erreicht! Glückwunsch!")
             self.user.save_to_db()
 
-    def display_tasks(self):
+    def display_all_tasks(self):
         open_tasks = self.task_manager.get_tasks(self.user.name, 'offen')
         completed_tasks = self.task_manager.get_tasks(self.user.name, 'erledigt')
 
@@ -177,12 +177,12 @@ def main():
         def select_profile_picture():
             def on_file_selected(e):
                 if e.files:
-                    file_path = e.files[0].path
+                    file_path = e.files[0].name
                     app.user.profile_picture = file_path
                     app.update_user_class_race(user_class.value, user_race.value)
                     ui.notify("Profilbild und Daten aktualisiert!")
 
-            ui.upload(on_upload=on_file_selected, accept="image/jpeg").open()
+            ui.upload(on_upload=on_file_selected).open()
 
         ui.button("Profilbild auswählen", on_click=select_profile_picture)
         ui.button("Speichern", on_click=lambda: app.update_user_class_race(user_class.value, user_race.value))
@@ -191,16 +191,14 @@ def main():
         task_name_input = ui.input("Aufgabenname:")
         task_due_date = ui.input("Fälligkeitsdatum (DD-MM-YYYY):", value=(datetime.now() + timedelta(days=1)).strftime("%d-%m-%Y"))
 
-        with ui.row():
-            ui.button("Leicht", on_click=lambda: app.add_task(task_name_input.value, "leicht", task_due_date.value), color="green")
-            ui.button("Mittel", on_click=lambda: app.add_task(task_name_input.value, "mittel", task_due_date.value), color="yellow")
-            ui.button("Schwer", on_click=lambda: app.add_task(task_name_input.value, "schwer", task_due_date.value), color="red")
+        ui.button("Aufgabe hinzufügen", on_click=lambda: app.add_task(task_name_input.value, "leicht", task_due_date.value), color="green")
 
         task_id_input = ui.input("Aufgaben-ID:")
-        ui.button("Aufgabe erledigen", on_click=lambda: app.complete_task(int(task_id_input.value)))
-        ui.button("Aufgabe löschen", on_click=lambda: app.delete_task(int(task_id_input.value)))
+        ui.button("Aufgabe erledigen", on_click=lambda: app.complete_task(int(task_id_input.value)), color="green")
+        ui.button("Aufgabe löschen", on_click=lambda: app.delete_task(int(task_id_input.value)), color="red")
+        ui.button("Offene Aufgaben anzeigen", on_click=lambda: app.display_all_tasks())
 
-    ui.button("Aufgaben anzeigen", on_click=app.display_tasks)
+    ui.button("Alle Aufgaben anzeigen", on_click=app.display_all_tasks)
 
 if __name__ in {"__main__", "__mp_main__"}:
     main()
