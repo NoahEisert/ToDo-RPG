@@ -82,23 +82,43 @@ class TaskManager:
         self.load_tasks()
         return difficulty
 
+    def delete_task(self, task_id):
+        conn = sqlite3.connect('app.db')
+        c = conn.cursor()
+        c.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
+        conn.commit()
+        conn.close()
+        self.load_tasks()
+
 class TaskApp:
     def __init__(self):
         self.user = None
         self.task_manager = TaskManager()
+        self.buttons_disabled = {
+            "login": False,
+            "save_profile": False
+        }
 
     def load_user(self, name):
+        if self.buttons_disabled["login"]:
+            ui.notify("Login wurde bereits abgeschlossen.")
+            return
         self.user = User.load_user(name)
         if not self.user:
             self.user = User(name)
             self.user.save_to_db()
+        self.buttons_disabled["login"] = True
         ui.notify(f"Willkommen, {self.user.name}!")
 
     def update_user_class_race(self, user_class, user_race):
+        if self.buttons_disabled["save_profile"]:
+            ui.notify("Profil wurde bereits gespeichert.")
+            return
         if self.user:
             self.user.user_class = user_class
             self.user.user_race = user_race
             self.user.save_to_db()
+            self.buttons_disabled["save_profile"] = True
             ui.notify("Klasse und Rasse erfolgreich aktualisiert.")
 
     def add_experience(self, points):
@@ -123,6 +143,23 @@ class TaskApp:
             for task in completed_tasks:
                 ui.label(f"{task[1]} - {task[2]} (Erledigt)")
 
+    def add_task(self, name, difficulty, due_date):
+        if self.user:
+            self.task_manager.add_task(name, difficulty, due_date, self.user.name)
+            ui.notify("Aufgabe hinzugefügt!")
+
+    def complete_task(self, task_id):
+        if self.user:
+            difficulty = self.task_manager.complete_task(task_id)
+            points = {"leicht": 1, "mittel": 2, "schwer": 3}.get(difficulty, 0)
+            self.add_experience(points)
+            ui.notify("Aufgabe abgeschlossen!")
+
+    def delete_task(self, task_id):
+        if self.user:
+            self.task_manager.delete_task(task_id)
+            ui.notify("Aufgabe gelöscht!")
+
 def main():
     init_db()
     app = TaskApp()
@@ -138,7 +175,7 @@ def main():
         user_race = ui.select(["Mensch", "Elf", "Zwerg", "Ork"], label="Rasse")
 
         def select_profile_picture():
-            file_dialog = ui.file_picker(on_pick=lambda file: setattr(app.user, 'profile_picture', file), filter=['.jpg'])
+            file_dialog = ui.file_picker(on_pick=lambda file: app.update_user_class_race(user_class.value, user_race.value) or setattr(app.user, 'profile_picture', file), filter=['.jpg'])
             file_dialog.show()
 
         ui.button("Profilbild auswählen", on_click=select_profile_picture)
@@ -149,9 +186,13 @@ def main():
         task_due_date = ui.input("Fälligkeitsdatum (DD-MM-YYYY):", value=(datetime.now() + timedelta(days=1)).strftime("%d-%m-%Y"))
 
         with ui.row():
-            ui.button("Leicht", on_click=lambda: app.task_manager.add_task(task_name_input.value, "leicht", task_due_date.value, app.user.name), color="green")
-            ui.button("Mittel", on_click=lambda: app.task_manager.add_task(task_name_input.value, "mittel", task_due_date.value, app.user.name), color="yellow")
-            ui.button("Schwer", on_click=lambda: app.task_manager.add_task(task_name_input.value, "schwer", task_due_date.value, app.user.name), color="red")
+            ui.button("Leicht", on_click=lambda: app.add_task(task_name_input.value, "leicht", task_due_date.value), color="green")
+            ui.button("Mittel", on_click=lambda: app.add_task(task_name_input.value, "mittel", task_due_date.value), color="yellow")
+            ui.button("Schwer", on_click=lambda: app.add_task(task_name_input.value, "schwer", task_due_date.value), color="red")
+
+        task_id_input = ui.input("Aufgaben-ID:")
+        ui.button("Aufgabe erledigen", on_click=lambda: app.complete_task(int(task_id_input.value)))
+        ui.button("Aufgabe löschen", on_click=lambda: app.delete_task(int(task_id_input.value)))
 
     ui.button("Aufgaben anzeigen", on_click=app.display_tasks)
 
