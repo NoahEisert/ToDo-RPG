@@ -175,8 +175,14 @@ def main():
         user_race = ui.select(["Mensch", "Elf", "Zwerg", "Ork"], label="Rasse")
 
         def select_profile_picture():
-            file_dialog = ui.file_picker(on_pick=lambda file: app.update_user_class_race(user_class.value, user_race.value) or setattr(app.user, 'profile_picture', file), filter=['.jpg'])
-            file_dialog.show()
+            def on_file_selected(e):
+                if e.files:
+                    file_path = e.files[0].path
+                    app.user.profile_picture = file_path
+                    app.update_user_class_race(user_class.value, user_race.value)
+                    ui.notify("Profilbild und Daten aktualisiert!")
+
+            ui.upload(on_upload=on_file_selected, accept="image/jpeg").open()
 
         ui.button("Profilbild auswählen", on_click=select_profile_picture)
         ui.button("Speichern", on_click=lambda: app.update_user_class_race(user_class.value, user_race.value))
