@@ -191,7 +191,10 @@ def main():
         task_name_input = ui.input("Aufgabenname:")
         task_due_date = ui.input("Fälligkeitsdatum (DD-MM-YYYY):", value=(datetime.now() + timedelta(days=1)).strftime("%d-%m-%Y"))
 
-        ui.button("Aufgabe hinzufügen", on_click=lambda: app.add_task(task_name_input.value, "leicht", task_due_date.value), color="green")
+        with ui.row():
+            ui.button("Leicht", on_click=lambda: app.add_task(task_name_input.value, "leicht", task_due_date.value), color="green")
+            ui.button("Mittel", on_click=lambda: app.add_task(task_name_input.value, "mittel", task_due_date.value), color="yellow")
+            ui.button("Schwer", on_click=lambda: app.add_task(task_name_input.value, "schwer", task_due_date.value), color="red")
 
         task_id_input = ui.input("Aufgaben-ID:")
         ui.button("Aufgabe erledigen", on_click=lambda: app.complete_task(int(task_id_input.value)), color="green")
