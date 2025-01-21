@@ -199,9 +199,9 @@ def main():
         task_id_input = ui.input("Aufgaben-ID:")
         ui.button("Aufgabe erledigen", on_click=lambda: app.complete_task(int(task_id_input.value)), color="green")
         ui.button("Aufgabe löschen", on_click=lambda: app.delete_task(int(task_id_input.value)), color="red")
-        ui.button("Offene Aufgaben anzeigen", on_click=lambda: app.display_all_tasks())
+        ui.button("Aufgaben anzeigen", on_click=lambda: app.display_all_tasks())
 
-    ui.button("Alle Aufgaben anzeigen", on_click=app.display_all_tasks)
+
 
 if __name__ in {"__main__", "__mp_main__"}:
     main()
