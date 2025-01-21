@@ -9,15 +9,15 @@ def init_db():
     c.execute('''CREATE TABLE IF NOT EXISTS users
                  (name TEXT PRIMARY KEY, profile_picture TEXT, user_class TEXT, user_race TEXT, experience INTEGER, level INTEGER)''')
     c.execute('''CREATE TABLE IF NOT EXISTS tasks
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, difficulty TEXT, due_date TEXT, status TEXT, user_name TEXT,
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, difficulty TEXT, due_date TEXT, status TEXT DEFAULT 'offen', user_name TEXT,
                   FOREIGN KEY(user_name) REFERENCES users(name))''')
     conn.commit()
     conn.close()
 
 class User:
-    def __init__(self, name, profile_picture, user_class, user_race, experience=0, level=1):
+    def __init__(self, name, profile_picture='', user_class=None, user_race=None, experience=0, level=1):
         self.name = name
-        self.profile_picture = profile_picture
+        self.profile_picture = profile_picture or 'default-profile.png'
         self.user_class = user_class
         self.user_race = user_race
         self.experience = experience
@@ -45,7 +45,6 @@ class User:
 
 class TaskManager:
     def __init__(self):
-        self.tasks = []
         self.load_tasks()
 
     def load_tasks(self):
@@ -55,44 +54,19 @@ class TaskManager:
         self.tasks = c.fetchall()
         conn.close()
 
-    def get_pending_tasks(self, user_name):
+    def get_tasks(self, user_name, status):
         conn = sqlite3.connect('app.db')
         c = conn.cursor()
-        c.execute("SELECT * FROM tasks WHERE status = 'offen' AND user_name = ?", (user_name,))
-        pending_tasks = c.fetchall()
+        c.execute("SELECT * FROM tasks WHERE status = ? AND user_name = ?", (status, user_name))
+        tasks = c.fetchall()
         conn.close()
-        return pending_tasks
+        return tasks
 
-    def get_completed_tasks(self, user_name):
+    def add_task(self, name, difficulty, due_date, user_name):
         conn = sqlite3.connect('app.db')
         c = conn.cursor()
-        c.execute("SELECT * FROM tasks WHERE status = 'erledigt' AND user_name = ?", (user_name,))
-        completed_tasks = c.fetchall()
-        conn.close()
-        return completed_tasks
-
-    def add_task(self, name, difficulty, due_date, user):
-        conn = sqlite3.connect('app.db')
-        c = conn.cursor()
-        c.execute('''INSERT INTO tasks (name, difficulty, due_date, status, user_name) VALUES (?, ?, ?, ?, ?)''',
-                  (name, difficulty, due_date, "offen", user.name))
-        conn.commit()
-        conn.close()
-        self.load_tasks()
-
-    def edit_task(self, task_id, new_name, new_difficulty, new_due_date):
-        conn = sqlite3.connect('app.db')
-        c = conn.cursor()
-        c.execute('''UPDATE tasks SET name = ?, difficulty = ?, due_date = ? WHERE id = ?''',
-                  (new_name, new_difficulty, new_due_date, task_id))
-        conn.commit()
-        conn.close()
-        self.load_tasks()
-
-    def delete_task(self, task_id):
-        conn = sqlite3.connect('app.db')
-        c = conn.cursor()
-        c.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
+        c.execute('''INSERT INTO tasks (name, difficulty, due_date, status, user_name) VALUES (?, ?, ?, 'offen', ?)''',
+                  (name, difficulty, due_date, user_name))
         conn.commit()
         conn.close()
         self.load_tasks()
@@ -100,7 +74,7 @@ class TaskManager:
     def complete_task(self, task_id):
         conn = sqlite3.connect('app.db')
         c = conn.cursor()
-        c.execute("UPDATE tasks SET status = ? WHERE id = ?", ("erledigt", task_id))
+        c.execute("UPDATE tasks SET status = 'erledigt' WHERE id = ?", (task_id,))
         c.execute("SELECT difficulty FROM tasks WHERE id = ?", (task_id,))
         difficulty = c.fetchone()[0]
         conn.commit()
@@ -112,131 +86,74 @@ class TaskApp:
     def __init__(self):
         self.user = None
         self.task_manager = TaskManager()
-        self.profile_ui = ui.image('default-profile.png').style('position: fixed; top: 10px; right: 10px; border-radius: 50%; width: 50px; height: 50px;').classes('hidden')
 
     def load_user(self, name):
         self.user = User.load_user(name)
-        if self.user:
-            self.profile_ui.set_source(self.user.profile_picture).classes(remove='hidden')
-        else:
-            self.create_user(name)
+        if not self.user:
+            self.user = User(name)
+            self.user.save_to_db()
+        ui.notify(f"Willkommen, {self.user.name}!")
 
-    def create_user(self, name):
-        profile_picture = ui.input("Profilbild (Pfad/URL):").value
-        user_class = ui.input("Klasse:").value
-        user_race = ui.input("Rasse:").value
-        self.user = User(name, profile_picture, user_class, user_race)
-        self.user.save_to_db()
-        self.profile_ui.set_source(profile_picture).classes(remove='hidden')
+    def update_user_class_race(self, user_class, user_race):
+        if self.user:
+            self.user.user_class = user_class
+            self.user.user_race = user_race
+            self.user.save_to_db()
+            ui.notify("Klasse und Rasse erfolgreich aktualisiert.")
 
     def add_experience(self, points):
         if self.user:
             self.user.experience += points
-            self.check_level_up()
+            while self.user.experience >= self.user.level * 5:
+                self.user.level += 1
+                self.user.experience -= self.user.level * 5
+                ui.notify(f"Level {self.user.level} erreicht! Glückwunsch!")
             self.user.save_to_db()
 
-    def check_level_up(self):
-        while self.user.experience >= self.user.level * 5:
-            self.user.level += 1
-            ui.notify(f"Level {self.user.level} erreicht! Belohnung erhalten.")
+    def display_tasks(self):
+        open_tasks = self.task_manager.get_tasks(self.user.name, 'offen')
+        completed_tasks = self.task_manager.get_tasks(self.user.name, 'erledigt')
 
-    def add_task(self, name, difficulty, due_date):
-        try:
-            due_date = datetime.strptime(due_date, "%d-%m-%Y").date()
-            self.task_manager.add_task(name, difficulty, str(due_date), self.user)
-            ui.notify("Aufgabe hinzugefügt.")
-        except ValueError:
-            ui.notify("Ungültiges Datum. Format: DD-MM-YYYY.")
+        with ui.column():
+            ui.label("Offene Aufgaben:")
+            for task in open_tasks:
+                ui.label(f"{task[1]} - {task[2]} (Fällig: {task[3]})")
 
-    def edit_task(self, task_id, new_name, new_difficulty, new_due_date):
-        self.task_manager.edit_task(task_id, new_name, new_difficulty, new_due_date)
-        ui.notify("Aufgabe bearbeitet.")
-
-    def delete_task(self, task_id):
-        self.task_manager.delete_task(task_id)
-        ui.notify("Aufgabe gelöscht.")
-
-    def complete_task(self, task_id):
-        difficulty = self.task_manager.complete_task(task_id)
-        points = {"leicht": 1, "mittel": 2, "schwer": 3}.get(difficulty, 0)
-        self.add_experience(points)
-        ui.notify("Aufgabe erledigt!")
-
-    def show_pending_tasks(self):
-        if self.user:
-            pending_tasks = self.task_manager.get_pending_tasks(self.user.name)
-            if pending_tasks:
-                task_list = "\n".join([f"{task[0]}: {task[1]} ({task[2]} - bis {task[3]})" for task in pending_tasks])
-                ui.notify(f"Offene Aufgaben für {self.user.name}:\n{task_list}")
-            else:
-                ui.notify("Keine offenen Aufgaben.")
-
-    def show_completed_tasks(self):
-        if self.user:
-            completed_tasks = self.task_manager.get_completed_tasks(self.user.name)
-            if completed_tasks:
-                task_list = "\n".join([f"{task[0]}: {task[1]} ({task[2]} - bis {task[3]})" for task in completed_tasks])
-                ui.notify(f"Erledigte Aufgaben für {self.user.name}:\n{task_list}")
-            else:
-                ui.notify("Keine erledigten Aufgaben.")
+            ui.label("Abgeschlossene Aufgaben:")
+            for task in completed_tasks:
+                ui.label(f"{task[1]} - {task[2]} (Erledigt)")
 
 def main():
     init_db()
     app = TaskApp()
 
-    ui.add_head_html('''
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 0;
-        }
-        .hidden {
-            display: none;
-        }
-        .profile {
-            position: fixed;
-            top: 10px;
-            right: 10px;
-            border-radius: 50%;
-            width: 50px;
-            height: 50px;
-        }
-    </style>
-    ''')
+    ui.label("Willkommen bei ToDoRPG")
 
-    ui.label("Willkommen beim ToDoRPG")
-    user_name_input = ui.input("Name eingeben:")
+    with ui.row():
+        user_name_input = ui.input("Name eingeben:")
+        ui.button("Bestätigen", on_click=lambda: app.load_user(user_name_input.value))
 
-    def on_submit():
-        user_name = user_name_input.value
-        app.load_user(user_name)
-        ui.notify(f"Willkommen, {user_name}!")
+    with ui.row():
+        user_class = ui.select(["Kämpfer", "Sprinter", "Arzt", "CEO"], label="Klasse")
+        user_race = ui.select(["Mensch", "Elf", "Zwerg", "Ork"], label="Rasse")
 
-    ui.button("Bestätigen", on_click=on_submit)
+        def select_profile_picture():
+            file_dialog = ui.file_picker(on_pick=lambda file: setattr(app.user, 'profile_picture', file), filter=['.jpg'])
+            file_dialog.show()
 
-    task_name_input = ui.input("Aufgabenname:")
-    due_date_input = ui.input("Fälligkeitsdatum (DD-MM-YYYY):", value=(datetime.now() + timedelta(days=1)).strftime("%d-%m-%Y"))
+        ui.button("Profilbild auswählen", on_click=select_profile_picture)
+        ui.button("Speichern", on_click=lambda: app.update_user_class_race(user_class.value, user_race.value))
 
-    with ui.button_group():
-        ui.button("Leicht", on_click=lambda: app.add_task(task_name_input.value, "leicht", due_date_input.value), color='green')
-        ui.button("Mittel", on_click=lambda: app.add_task(task_name_input.value, "mittel", due_date_input.value), color='yellow')
-        ui.button("Schwer", on_click=lambda: app.add_task(task_name_input.value, "schwer", due_date_input.value), color='red')
+    with ui.column():
+        task_name_input = ui.input("Aufgabenname:")
+        task_due_date = ui.input("Fälligkeitsdatum (DD-MM-YYYY):", value=(datetime.now() + timedelta(days=1)).strftime("%d-%m-%Y"))
 
-    task_id_input = ui.input("Aufgaben-ID:")
+        with ui.row():
+            ui.button("Leicht", on_click=lambda: app.task_manager.add_task(task_name_input.value, "leicht", task_due_date.value, app.user.name), color="green")
+            ui.button("Mittel", on_click=lambda: app.task_manager.add_task(task_name_input.value, "mittel", task_due_date.value, app.user.name), color="yellow")
+            ui.button("Schwer", on_click=lambda: app.task_manager.add_task(task_name_input.value, "schwer", task_due_date.value, app.user.name), color="red")
 
-    def complete_task():
-        app.complete_task(int(task_id_input.value))
-
-    ui.button("Aufgabe erledigen", on_click=complete_task)
-
-    def delete_task():
-        app.delete_task(int(task_id_input.value))
-
-    ui.button("Aufgabe löschen", on_click=delete_task)
-
-    ui.button("Offene Aufgaben anzeigen", on_click=app.show_pending_tasks)
-    ui.button("Erledigte Aufgaben anzeigen", on_click=app.show_completed_tasks)
+    ui.button("Aufgaben anzeigen", on_click=app.display_tasks)
 
 if __name__ in {"__main__", "__mp_main__"}:
     main()
