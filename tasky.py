@@ -245,6 +245,7 @@ def main():
             ui.button("Mittel", on_click=lambda: app.add_task(task_name_input.value, "mittel", task_due_date.value), color="yellow")
             ui.button("Schwer", on_click=lambda: app.add_task(task_name_input.value, "schwer", task_due_date.value), color="red")
 
+<<<<<<< HEAD
         # Eingabefeld für das Erledigen oder Löschen von Aufgaben
         task_action_input = ui.input("Aufgabenname eingeben:")
 
@@ -257,6 +258,14 @@ def main():
         with ui.row():
             ui.button("Offene Aufgaben anzeigen", on_click=app.display_open_tasks)
             ui.button("Abgeschlossene Aufgaben anzeigen", on_click=app.display_completed_tasks)
+=======
+        task_id_input = ui.input("Aufgaben-ID:")
+        ui.button("Aufgabe erledigen", on_click=lambda: app.complete_task(int(task_id_input.value)), color="green")
+        ui.button("Aufgabe löschen", on_click=lambda: app.delete_task(int(task_id_input.value)), color="red")
+        ui.button("Aufgaben anzeigen", on_click=lambda: app.display_all_tasks())
+
+
+>>>>>>> 311fa2dbad03fac0c47c20c71b0d5d818002aafd
 
 if __name__ in {"__main__", "__mp_main__"}:
     main()
