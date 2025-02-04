@@ -148,7 +148,7 @@ class TaskApp:
                 self.user.level += 1
                 self.user.experience -= self.user.level * 5
                 self.user.gold += 20  # 20 Gold pro Level-Up
-                ui.notify(f"Level {self.user.level} erreicht! Glückwunsch! Du hast 20 Gold erhalten!",type="info")
+                ui.notify(f"Level {self.user.level} erreicht! Glückwunsch! Du hast 20 Gold erhalten. Dein aktueller Goldwert: {self.user.gold}", type="info")
             self.user.save_to_db()
 
     def add_task(self, name, difficulty, due_date):
