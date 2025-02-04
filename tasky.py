@@ -8,7 +8,7 @@ def init_db():
     conn = sqlite3.connect('app.db')
     c = conn.cursor()
     c.execute('''CREATE TABLE IF NOT EXISTS users
-                 (name TEXT PRIMARY KEY, profile_picture TEXT, user_class TEXT, user_race TEXT, experience INTEGER, level INTEGER)''')
+                 (name TEXT PRIMARY KEY, profile_picture TEXT, user_class TEXT, user_race TEXT, experience INTEGER, level INTEGER, gold INTEGER)''')
     c.execute('''CREATE TABLE IF NOT EXISTS tasks
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, difficulty TEXT, due_date TEXT, status TEXT DEFAULT 'offen', user_name TEXT,
                   FOREIGN KEY(user_name) REFERENCES users(name))''')
@@ -16,13 +16,14 @@ def init_db():
     conn.close()
 
 class User:
-    def __init__(self, name, profile_picture='', user_class=None, user_race=None, experience=0, level=1):
+    def __init__(self, name, profile_picture='', user_class=None, user_race=None, experience=0, level=1, gold=0):
         self.name = name
         self.profile_picture = profile_picture or 'default-profile.jpg'
         self.user_class = user_class
         self.user_race = user_race
         self.experience = experience
         self.level = level
+        self.gold = gold
 
     @staticmethod
     def load_user(name):
@@ -38,9 +39,9 @@ class User:
     def save_to_db(self):
         conn = sqlite3.connect('app.db')
         c = conn.cursor()
-        c.execute('''INSERT OR REPLACE INTO users (name, profile_picture, user_class, user_race, experience, level) 
-                     VALUES (?, ?, ?, ?, ?, ?)''', 
-                  (self.name, self.profile_picture, self.user_class, self.user_race, self.experience, self.level))
+        c.execute('''INSERT OR REPLACE INTO users (name, profile_picture, user_class, user_race, experience, level, gold) 
+                     VALUES (?, ?, ?, ?, ?, ?, ?)''', 
+                  (self.name, self.profile_picture, self.user_class, self.user_race, self.experience, self.level, self.gold))
         conn.commit()
         conn.close()
 
@@ -137,6 +138,7 @@ class TaskApp:
                     ui.label(f"Klasse: {self.user.user_class}")
                     ui.label(f"Rasse: {self.user.user_race}")
                     ui.label(f"Level: {self.user.level}")
+                    ui.label(f"Gold: {self.user.gold}")  # Gold anzeigen
                 self.text_elements.append(column)  # Speichere die textbasierte UI-Komponente
 
     def add_experience(self, points):
@@ -145,7 +147,8 @@ class TaskApp:
             while self.user.experience >= self.user.level * 5:
                 self.user.level += 1
                 self.user.experience -= self.user.level * 5
-                ui.notify(f"Level {self.user.level} erreicht! Glückwunsch!")
+                self.user.gold += 20  # 20 Gold pro Level-Up
+                ui.notify(f"Level {self.user.level} erreicht! Glückwunsch! Du hast 20 Gold erhalten!",type="info")
             self.user.save_to_db()
 
     def add_task(self, name, difficulty, due_date):
@@ -257,7 +260,6 @@ def main():
         with ui.row():
             ui.button("Offene Aufgaben anzeigen", on_click=app.display_open_tasks)
             ui.button("Abgeschlossene Aufgaben anzeigen", on_click=app.display_completed_tasks)
-
 
 if __name__ in {"__main__", "__mp_main__"}:
     main()
